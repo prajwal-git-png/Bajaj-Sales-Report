@@ -1,17 +1,19 @@
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { UserProfile, DailyReport } from "../types";
 
-// @ts-ignore - process.env provided by build environment
-const apiKey = process.env.API_KEY;
+// FIX: In Vite, we access env variables via import.meta.env
+// and they must be prefixed with VITE_
+const apiKey = import.meta.env.VITE_API_KEY;
 
-if (!apiKey) {
-  throw new Error("API_KEY is not defined in environment variables");
-}
-
-const genAI = new GoogleGenerativeAI(apiKey);
+// Initialize genAI only if the key exists to prevent immediate crashes
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]) => {
+    if (!genAI) {
+        console.error("Missing API Key. Please check .env file.");
+        throw new Error("Chat system unavailable: Missing API Configuration.");
+    }
+
     const recentSales = sales
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 10);
@@ -46,15 +48,17 @@ export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]) =>
 };
 
 export const getMotivationalQuote = async (): Promise<string> => {
+    if (!genAI) return "Set your API Key to see magic happen! 🚀";
+
     try {
         const model = genAI.getGenerativeModel({ 
             model: "gemini-2.0-flash-exp" 
         });
-        
+
         const result = await model.generateContent(
             'Generate a short, powerful, unique motivational quote specifically for a retail sales executive to boost their morale. Max 15 words. End with one relevant emoji. Plain text only.'
         );
-        
+
         const response = result.response;
         return response.text() || "Success is a journey, not a destination. 🚀";
     } catch (error) {
