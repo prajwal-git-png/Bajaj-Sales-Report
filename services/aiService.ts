@@ -1,13 +1,17 @@
-import { GoogleGenAI, Chat } from "@google/genai";
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { UserProfile, DailyReport } from "../types";
 
 // @ts-ignore - process.env provided by build environment
 const apiKey = process.env.API_KEY;
 
-const ai = new GoogleGenAI({ apiKey });
+if (!apiKey) {
+  throw new Error("API_KEY is not defined in environment variables");
+}
 
-export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]): Chat => {
-    // Prepare context
+const genAI = new GoogleGenerativeAI(apiKey);
+
+export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]) => {
     const recentSales = sales
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 10);
@@ -31,21 +35,28 @@ export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]): C
         Recent Sales Context: ${JSON.stringify(recentSales)}
     `;
 
-    return ai.chats.create({
-        model: 'gemini-2.0-flash',
-        config: {
-            systemInstruction: systemInstruction,
-        }
+    const model = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash-exp",
+        systemInstruction: systemInstruction,
+    });
+
+    return model.startChat({
+        history: [],
     });
 };
 
 export const getMotivationalQuote = async (): Promise<string> => {
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: 'Generate a short, powerful, unique motivational quote specifically for a retail sales executive to boost their morale. Max 15 words. End with one relevant emoji. Plain text only.',
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.0-flash-exp" 
         });
-        return response.text || "Success is a journey, not a destination. 🚀";
+        
+        const result = await model.generateContent(
+            'Generate a short, powerful, unique motivational quote specifically for a retail sales executive to boost their morale. Max 15 words. End with one relevant emoji. Plain text only.'
+        );
+        
+        const response = result.response;
+        return response.text() || "Success is a journey, not a destination. 🚀";
     } catch (error) {
         console.error("AI Quote Error:", error);
         return "Your hard work today is your success tomorrow. 💪";
