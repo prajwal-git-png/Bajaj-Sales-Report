@@ -1,86 +1,90 @@
-import { GoogleGenAI, Chat } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { UserProfile, DailyReport } from "../types";
 
-// @ts-ignore - process.env provided by build environment
 const apiKey = process.env.API_KEY;
-
 const ai = new GoogleGenAI({ apiKey });
 
-export const createSalesCoachChat = (user: UserProfile, sales: DailyReport[]): Chat => {
-    // Prepare context
+export const askSalesCoach = async (
+  user: UserProfile,
+  sales: DailyReport[],
+  message: string
+): Promise<string> => {
+  try {
+    if (!apiKey) throw new Error("No API Key");
+
     const recentSales = sales
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 10);
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10);
 
     const systemInstruction = `
-        You are an expert Bajaj Electricals Sales Coach. 
-        User: ${user.name} (${user.storeName}). Target: ${user.monthlyTarget}.
-        
-        Task:
-        1. Analyze sales performance.
-        2. Answer technical questions about Bajaj products (Mixers, Geysers, Irons).
-        3. Provide sales closing tips.
+You are an expert Bajaj Electricals Sales Coach.
+User: ${user.name} (${user.storeName})
+Monthly Target: ₹${user.monthlyTarget}
 
-        Rules:
-        - Plain text only. No Markdown (*, #, \`).
-        - Use Emojis for structure.
-        - Be concise.
-        
-        Context: ${JSON.stringify(recentSales)}
-    `;
+Tasks:
+1. Analyze sales performance
+2. Answer Bajaj product questions (Mixers, Geysers, Irons)
+3. Give sales closing tips
 
-    return ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: {
-            systemInstruction: systemInstruction,
-            maxOutputTokens: 300, // Limit tokens to save cost/quota
-        }
+Rules:
+- Plain text only
+- Use emojis
+- Be concise
+
+Recent Sales:
+${JSON.stringify(recentSales)}
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `${systemInstruction}\n\nUser Query: ${message}`,
+      config: { maxOutputTokens: 300 }
     });
+
+    return response.text || "Keep pushing, success is close 💪";
+  } catch {
+    return getOfflineResponse(message, user);
+  }
 };
 
 export const getMotivationalQuote = async (): Promise<string> => {
-    try {
-        if (!apiKey) throw new Error("No API Key");
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: 'Generate a short, powerful retail sales motivation quote. Max 15 words. Plain text.',
-            config: { maxOutputTokens: 50 }
-        });
-        return response.text || "Success is a journey, not a destination. 🚀";
-    } catch (error) {
-        console.warn("AI Offline, using fallback quote");
-        return "Your hard work today is your success tomorrow. 💪";
-    }
+  try {
+    if (!apiKey) throw new Error("No API Key");
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: "Generate a short, powerful retail sales motivation quote. Max 15 words. Plain text.",
+      config: { maxOutputTokens: 50 }
+    });
+
+    return response.text || "Success is a journey, not a destination 🚀";
+  } catch {
+    return "Your hard work today is your success tomorrow 💪";
+  }
 };
 
-// Fallback logic for when API is unavailable or quota is exceeded
 export const getOfflineResponse = (query: string, user: UserProfile): string => {
-    const lower = query.toLowerCase();
-    
-    if (lower.includes('hello') || lower.includes('hi')) {
-        return `Hello ${user.name}! I am your Offline Sales Assistant. I can help with product details while you are offline. ⚡`;
-    }
-    
-    if (lower.includes('mixer') || lower.includes('grinder')) {
-        return "🔹 Bajaj Mixers (GX Series): 500W-750W motors. \n🔹 USP: DuraCut Blades & 100% Copper Motors. \n🔹 Warranty: 2 Years on Product, 5 Years on Motor.";
-    }
-    
-    if (lower.includes('geyser') || lower.includes('heater') || lower.includes('water')) {
-        return "🔹 Instant Geysers (3L): 3KW/4.5KW for quick heating. \n🔹 Storage (10L-25L): Glassline inner tank preventing corrosion. \n🔹 USP: Swirl Flow Technology for 20% more hot water.";
-    }
+  const lower = query.toLowerCase();
 
-    if (lower.includes('iron') || lower.includes('steam')) {
-        return "🔹 Dry Irons (DX): Heavy weight for crisp ironing. \n🔹 Steam Irons (MX): Non-stick coated soleplate. \n🔹 USP: 360-degree swivel cord for easy movement.";
-    }
-    
-    if (lower.includes('target') || lower.includes('sales')) {
-        return `Your monthly target is ₹${user.monthlyTarget.toLocaleString()}. Focus on high-value items like OTGs and Storage Geysers to reach it faster! 🎯`;
-    }
+  if (lower.includes("hello") || lower.includes("hi")) {
+    return `Hello ${user.name}! I am your Offline Sales Assistant ⚡`;
+  }
 
-    if (lower.includes('tip') || lower.includes('sell')) {
-        return "💡 Sales Tip: Always demonstrate the product. Let the customer hold it or feel the build quality. This increases trust by 40%.";
-    }
+  if (lower.includes("mixer") || lower.includes("grinder")) {
+    return "🔹 Bajaj Mixers: 500W–750W motors\n🔹 DuraCut blades\n🔹 5-year motor warranty";
+  }
 
-    return "I am currently in Offline Mode. 🌐 \n\nI can tell you about: \n1. Mixers 🌪️ \n2. Geysers 🚿 \n3. Irons 👕 \n4. Sales Tips 💡";
+  if (lower.includes("geyser") || lower.includes("heater")) {
+    return "🚿 Bajaj Geysers: Instant & Storage\n🔹 Glassline tank\n🔹 Swirl Flow technology";
+  }
+
+  if (lower.includes("iron")) {
+    return "👕 Bajaj Irons: Dry & Steam\n🔹 Non-stick soleplate\n🔹 360° swivel cord";
+  }
+
+  if (lower.includes("target") || lower.includes("sales")) {
+    return `🎯 Monthly Target: ₹${user.monthlyTarget.toLocaleString()}\nFocus on high-value products like Geysers & OTGs`;
+  }
+
+  return "Offline mode 🌐\nI can help with Mixers, Geysers, Irons & Sales tips 💡";
 };
