@@ -1,7 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, DailyReport } from "../types";
 
-const apiKey = process.env.API_KEY;
+// Use env variable from backend (.env)
+const apiKey = process.env.GEMINI_API_KEY;
+
 const ai = new GoogleGenAI({ apiKey });
 
 export const askSalesCoach = async (
@@ -42,7 +44,8 @@ ${JSON.stringify(recentSales)}
     });
 
     return response.text || "Keep pushing, success is close 💪";
-  } catch {
+  } catch (err) {
+    console.warn("AI offline or error:", err);
     return getOfflineResponse(message, user);
   }
 };
